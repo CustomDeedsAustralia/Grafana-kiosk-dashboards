@@ -1,0 +1,22 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Dependencies and generated caches
+node_modules/
+coverage/
+*.log
+*.tmp
+
+# Editor and agent configuration
+.cursor/
+.vscode/
+.idea/
+
+# Operating system files
+Thumbs.db
+Desktop.ini
+.DS_Store

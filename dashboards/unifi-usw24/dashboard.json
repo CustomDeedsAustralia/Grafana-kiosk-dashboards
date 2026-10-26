@@ -1,0 +1,127 @@
+{
+  "dashboard": {
+    "uid": "kiosk-unifi-switch",
+    "title": "Kiosk — UniFi Switch",
+    "description": "UniFi display-inspired switch telemetry dashboard.",
+    "tags": [
+      "kiosk",
+      "unifi",
+      "ubiquiti",
+      "network"
+    ],
+    "timezone": "UTC",
+    "refresh": "10s",
+    "time": {
+      "from": "now/d",
+      "to": "now"
+    },
+    "timepicker": {
+      "hidden": true
+    },
+    "graphTooltip": 0,
+    "schemaVersion": 42,
+    "panels": [
+      {
+        "id": 1,
+        "type": "volkovlabs-echarts-panel",
+        "pluginVersion": "7.2.5",
+        "title": "",
+        "description": "Live switch telemetry. The throughput graph uses only the configured uplink RX and TX entities.",
+        "transparent": true,
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        },
+        "datasource": {
+          "type": "influxdb",
+          "uid": "replace-with-your-influxdb-datasource-uid"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": {
+              "type": "influxdb",
+              "uid": "replace-with-your-influxdb-datasource-uid"
+            },
+            "queryType": "flux",
+            "query": "from(bucket: \"homeassistant\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._field == \"value\")\n  |> filter(fn: (r) => r.domain == \"sensor\")\n  |> filter(fn: (r) =>\n    r.entity_id == \"unifi_switch_uplink_rx\" or\n    r.entity_id == \"unifi_switch_uplink_tx\"\n  )\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> group(columns: [\"entity_id\"])"
+          },
+          {
+            "refId": "B",
+            "datasource": {
+              "type": "influxdb",
+              "uid": "replace-with-your-influxdb-datasource-uid"
+            },
+            "queryType": "flux",
+            "query": "from(bucket: \"homeassistant\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._field == \"value\")\n  |> filter(fn: (r) => r.domain == \"sensor\")\n  |> filter(fn: (r) =>\n    r.entity_id == \"unifi_switch_cpu_utilisation\" or\n    r.entity_id == \"unifi_switch_memory_utilisation\" or\n    r.entity_id == \"unifi_switch_clients\" or\n    r.entity_id == \"unifi_switch_uplink_speed\"\n  )\n  |> group(columns: [\"entity_id\"])\n  |> last()"
+          },
+          {
+            "refId": "C",
+            "datasource": {
+              "type": "influxdb",
+              "uid": "replace-with-your-influxdb-datasource-uid"
+            },
+            "queryType": "flux",
+            "query": "from(bucket: \"homeassistant\")\n  |> range(start: -365d)\n  |> filter(fn: (r) => r.entity_id == \"unifi_switch_state\" and r._field == \"state\")\n  |> group(columns: [\"entity_id\"])\n  |> last()"
+          },
+          {
+            "refId": "D",
+            "datasource": {
+              "type": "influxdb",
+              "uid": "replace-with-your-influxdb-datasource-uid"
+            },
+            "queryType": "flux",
+            "query": "from(bucket: \"homeassistant\")\n  |> range(start: -365d)\n  |> filter(fn: (r) => r.entity_id == \"unifi_switch_uptime\" and r._field == \"state\")\n  |> group(columns: [\"entity_id\"])\n  |> last()\n  |> map(fn: (r) => ({\n    r with\n    _value: float(v: uint(v: now()) - uint(v: time(v: r._value))) / 1000000000.0\n  }))"
+          },
+          {
+            "refId": "E",
+            "datasource": {
+              "type": "influxdb",
+              "uid": "replace-with-your-influxdb-datasource-uid"
+            },
+            "queryType": "flux",
+            "query": "from(bucket: \"homeassistant\")\n  |> range(start: -365d)\n  |> filter(fn: (r) =>\n    r.entity_id == \"unifi_switch_firmware\" and\n    r._field == \"installed_version_str\"\n  )\n  |> group(columns: [\"entity_id\"])\n  |> last()"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "options": {
+          "renderer": "canvas",
+          "map": "none",
+          "editorMode": "code",
+          "editor": {
+            "format": "auto"
+          },
+          "themeEditor": {
+            "name": "default",
+            "config": "{}"
+          },
+          "getOption": "const deviceConfig = {\"dashboardUid\":\"kiosk-unifi-switch\",\"deviceName\":\"UniFi Switch\",\"uplinkLabel\":\"UPLINK PORT\",\"hardwareRevision\":\"N/A\",\"macAddress\":\"00:00:00:00:00:00\",\"model\":\"Unknown model\",\"entities\":{\"uplinkRx\":\"unifi_switch_uplink_rx\",\"uplinkTx\":\"unifi_switch_uplink_tx\",\"cpu\":\"unifi_switch_cpu_utilisation\",\"memory\":\"unifi_switch_memory_utilisation\",\"clients\":\"unifi_switch_clients\",\"linkSpeed\":\"unifi_switch_uplink_speed\",\"state\":\"unifi_switch_state\",\"uptime\":\"unifi_switch_uptime\",\"firmware\":\"unifi_switch_firmware\"}};\nconst frames = context.panel.data.series || [];\r\n\r\nconst values = (field) => {\r\n  if (!field || !field.values) return [];\r\n  if (typeof field.values.toArray === 'function') return field.values.toArray();\r\n  if (field.values.buffer) return field.values.buffer;\r\n  return Array.from(field.values);\r\n};\r\n\r\nconst metric = {};\r\nlet firmware = '—';\r\nlet state = 'unknown';\r\nlet rangeStart;\r\nlet rangeStop;\r\n\r\nfor (const frame of frames) {\r\n  const startField = frame.fields.find((field) => field.name === '_start');\r\n  const stopField = frame.fields.find((field) => field.name === '_stop');\r\n  rangeStart ??= values(startField)[0];\r\n  rangeStop ??= values(stopField)[0];\r\n  const timeField =\r\n    frame.fields.find((field) => field.name === '_time') ||\r\n    frame.fields.find((field) => field.name === 'Time') ||\r\n    frame.fields.find((field) => field.type === 'time');\r\n  const valueField =\r\n    frame.fields.find((field) => field.name === '_value') ||\r\n    frame.fields.find((field) => field.name === 'Value') ||\r\n    frame.fields.find(\r\n      (field) =>\r\n        field.type !== 'time' &&\r\n        !['_field', '_measurement', 'domain'].includes(field.name)\r\n    );\r\n  if (!valueField) continue;\r\n\r\n  const entityId = valueField.labels?.entity_id;\r\n  const fieldValues = values(valueField);\r\n  if (entityId) {\r\n    metric[entityId] = {\r\n      times: values(timeField),\r\n      values: fieldValues,\r\n      latest: fieldValues.filter((value) => value !== null && value !== undefined).at(-1),\r\n    };\r\n  }\r\n\r\n  if (entityId === deviceConfig.entities.firmware && fieldValues.length) {\r\n    firmware = String(fieldValues.at(-1));\r\n  }\r\n  if (entityId === deviceConfig.entities.state && fieldValues.length) {\r\n    state = String(fieldValues.at(-1));\r\n  }\r\n}\r\n\r\nconst rx = metric[deviceConfig.entities.uplinkRx] || { times: [], values: [], latest: 0 };\r\nconst tx = metric[deviceConfig.entities.uplinkTx] || { times: [], values: [], latest: 0 };\r\nconst cpu = Number(metric[deviceConfig.entities.cpu]?.latest || 0);\r\nconst memory = Number(metric[deviceConfig.entities.memory]?.latest || 0);\r\nconst clients = Number(metric[deviceConfig.entities.clients]?.latest || 0);\r\nconst linkSpeed = Number(metric[deviceConfig.entities.linkSpeed]?.latest || 0);\r\nconst uptimeSeconds = Number(metric[deviceConfig.entities.uptime]?.latest || 0);\r\n\r\nconst W = context.panel.chart.getWidth();\r\nconst H = context.panel.chart.getHeight();\r\nconst pad = 16;\r\nconst gap = 14;\r\nconst leftWidth = Math.max(440, Math.floor((W - pad * 2 - gap) * 0.57));\r\nconst rightX = pad + leftWidth + gap;\r\nconst rightWidth = W - rightX - pad;\r\nconst smallGap = 12;\r\nconst compact = H < 420;\r\nconst smallWidth = compact\r\n  ? Math.floor((rightWidth - smallGap * 2) / 3)\r\n  : Math.floor((rightWidth - smallGap) / 2);\r\nconst smallHeight = compact\r\n  ? Math.floor((H - pad * 2 - smallGap) / 2)\r\n  : Math.floor((H - pad * 2 - smallGap * 2) / 3);\r\n\r\nconst colors = {\r\n  background: '#03071A',\r\n  card: '#08133F',\r\n  cardAlt: '#0A174B',\r\n  border: '#173C9A',\r\n  primary: '#4B7CFF',\r\n  secondary: '#7EA5FF',\r\n  cyan: '#58C7FF',\r\n  text: '#F4F7FF',\r\n  muted: '#7188C3',\r\n  green: '#4FE3A4',\r\n};\r\n\r\nconst text = (x, y, value, size, color = colors.text, weight = 500, align = 'left') => ({\r\n  type: 'text',\r\n  silent: true,\r\n  style: {\r\n    x,\r\n    y,\r\n    text: String(value),\r\n    fill: color,\r\n    font: `${weight} ${size}px \"Segoe UI\", sans-serif`,\r\n    textAlign: align,\r\n    textVerticalAlign: 'middle',\r\n  },\r\n});\r\n\r\nconst card = (x, y, width, height, title, children = []) => ({\r\n  type: 'group',\r\n  left: x,\r\n  top: y,\r\n  silent: true,\r\n  children: [\r\n    {\r\n      type: 'rect',\r\n      shape: { x: 0, y: 0, width, height, r: 18 },\r\n      style: {\r\n        fill: colors.card,\r\n        stroke: colors.border,\r\n        lineWidth: 1,\r\n        shadowBlur: 18,\r\n        shadowColor: 'rgba(0, 18, 75, 0.55)',\r\n      },\r\n    },\r\n    text(22, 31, title, 15, colors.text, 700),\r\n    {\r\n      type: 'circle',\r\n      shape: { cx: width - 26, cy: 29, r: 9 },\r\n      style: { fill: 'transparent', stroke: colors.primary, lineWidth: 2 },\r\n    },\r\n    text(width - 26, 29, 'i', 11, colors.secondary, 700, 'center'),\r\n    ...children,\r\n  ],\r\n});\r\n\r\nconst bar = (x, y, width, value, color) => [\r\n  {\r\n    type: 'rect',\r\n    shape: { x, y, width, height: 7, r: 4 },\r\n    style: { fill: '#101D4F' },\r\n  },\r\n  {\r\n    type: 'rect',\r\n    shape: { x, y, width: Math.max(0, Math.min(width, width * value / 100)), height: 7, r: 4 },\r\n    style: { fill: color },\r\n  },\r\n];\r\n\r\nconst days = Math.floor(uptimeSeconds / 86400);\r\nconst hours = Math.floor((uptimeSeconds % 86400) / 3600);\r\nconst minutes = Math.floor((uptimeSeconds % 3600) / 60);\r\nconst seconds = Math.floor(uptimeSeconds % 60);\r\nconst stateOk = state.toLowerCase() === 'connected';\r\n\r\nconst infoY = pad;\r\nconst healthX = rightX;\r\nconst utilizationX = rightX + smallWidth + smallGap;\r\nconst row2Y = pad + smallHeight + smallGap;\r\nconst row3Y = row2Y + smallHeight + smallGap;\r\nconst uptimeWidth = compact ? smallWidth * 2 + smallGap : rightWidth;\r\nconst hardwareX = compact ? rightX + (smallWidth + smallGap) * 2 : healthX;\r\nconst hardwareY = compact ? row2Y : row3Y;\r\nconst versionX = compact ? rightX + (smallWidth + smallGap) * 2 : utilizationX;\r\nconst versionY = compact ? infoY : row3Y;\r\n\r\nconst graphics = [\r\n  {\r\n    type: 'rect',\r\n    left: 0,\r\n    top: 0,\r\n    shape: { width: W, height: H },\r\n    style: { fill: colors.background },\r\n    silent: true,\r\n  },\r\n  card(pad, pad, leftWidth, H - pad * 2, `${deviceConfig.uplinkLabel} WAN UPLINK`, [\r\n    text(28, 83, 'Internet Utilisation Today', 14, colors.muted, 700),\r\n    text(leftWidth - 200, 49, '▲', 20, colors.cyan, 700),\r\n    text(leftWidth - 168, 49, `${Number(tx.latest || 0).toFixed(1)}`, 34, colors.text, 700),\r\n    text(leftWidth - 73, 51, 'Mbps', 16, colors.secondary, 500),\r\n    text(leftWidth - 200, 89, '▼', 20, colors.primary, 700),\r\n    text(leftWidth - 168, 89, `${Number(rx.latest || 0).toFixed(1)}`, 34, colors.text, 700),\r\n    text(leftWidth - 73, 91, 'Mbps', 16, colors.secondary, 500),\r\n  ]),\r\n  card(healthX, infoY, smallWidth, smallHeight, 'STATUS', [\r\n    text(smallWidth / 2, smallHeight * 0.48, stateOk ? 'CONNECTED' : state.toUpperCase(), 22, stateOk ? colors.green : '#FF6B77', 700, 'center'),\r\n    text(smallWidth / 2, smallHeight * 0.70, `${clients} CLIENTS`, 14, colors.secondary, 600, 'center'),\r\n    text(smallWidth / 2, smallHeight * 0.84, `${linkSpeed.toFixed(0)} Mbps UPLINK`, 12, colors.muted, 500, 'center'),\r\n  ]),\r\n  card(utilizationX, infoY, smallWidth, smallHeight, 'UTILISATION', [\r\n    text(20, smallHeight * 0.45, 'CPU', 12, colors.muted, 700),\r\n    text(smallWidth - 20, smallHeight * 0.45, `${cpu.toFixed(1)}%`, 16, colors.text, 700, 'right'),\r\n    ...bar(20, smallHeight * 0.56, smallWidth - 40, cpu, colors.cyan),\r\n    text(20, smallHeight * 0.73, 'MEMORY', 12, colors.muted, 700),\r\n    text(smallWidth - 20, smallHeight * 0.73, `${memory.toFixed(1)}%`, 16, colors.text, 700, 'right'),\r\n    ...bar(20, smallHeight * 0.84, smallWidth - 40, memory, colors.primary),\r\n  ]),\r\n  card(healthX, row2Y, uptimeWidth, smallHeight, 'UPTIME', [\r\n    ...[\r\n      [days, 'DAYS'],\r\n      [hours, 'HRS'],\r\n      [minutes, 'MINS'],\r\n      [seconds, 'SECS'],\r\n    ].flatMap(([value, label], index) => {\r\n      const x = uptimeWidth * (index + 0.5) / 4;\r\n      return [\r\n        text(x, smallHeight * 0.54, String(value).padStart(2, '0'), 25, colors.primary, 700, 'center'),\r\n        text(x, smallHeight * 0.76, label, 10, colors.muted, 700, 'center'),\r\n      ];\r\n    }),\r\n  ]),\r\n  card(hardwareX, hardwareY, smallWidth, smallHeight, 'HARDWARE', [\r\n    text(18, smallHeight * 0.45, 'Board Revision', 12, colors.muted, 500),\r\n    text(smallWidth - 18, smallHeight * 0.45, deviceConfig.hardwareRevision, 15, colors.secondary, 700, 'right'),\r\n    text(smallWidth / 2, smallHeight * 0.68, deviceConfig.macAddress, 15, colors.primary, 700, 'center'),\r\n    text(smallWidth / 2, smallHeight * 0.84, deviceConfig.model, 11, colors.muted, 600, 'center'),\r\n  ]),\r\n  card(versionX, versionY, smallWidth, smallHeight, 'VERSION', [\r\n    text(smallWidth / 2, smallHeight * 0.48, deviceConfig.deviceName, 15, colors.secondary, 600, 'center'),\r\n    text(smallWidth / 2, smallHeight * 0.72, firmware, 24, colors.primary, 700, 'center'),\r\n  ]),\r\n];\r\n\r\nreturn {\r\n  backgroundColor: colors.background,\r\n  animationDuration: 450,\r\n  tooltip: {\r\n    trigger: 'axis',\r\n    backgroundColor: '#09143B',\r\n    borderColor: colors.border,\r\n    textStyle: { color: colors.text },\r\n    valueFormatter: (value) => `${Number(value).toFixed(2)} Mbps`,\r\n  },\r\n  grid: {\r\n    left: pad + 28,\r\n    top: compact ? 145 : 166,\r\n    width: leftWidth - 56,\r\n    height: compact ? Math.max(55, H - 205) : Math.max(100, H - 238),\r\n    containLabel: false,\r\n  },\r\n  xAxis: {\r\n    type: 'time',\r\n    min: rangeStart,\r\n    max: rangeStop,\r\n    boundaryGap: false,\r\n    axisLine: { lineStyle: { color: '#284383' } },\r\n    axisLabel: {\r\n      show: true,\r\n      color: colors.muted,\r\n      hideOverlap: true,\r\n      formatter: {\r\n        hour: '{HH}:{mm}',\r\n        minute: '{HH}:{mm}',\r\n      },\r\n    },\r\n    axisTick: { show: false },\r\n    splitLine: { show: false },\r\n  },\r\n  yAxis: [\r\n    {\r\n      type: 'value',\r\n      name: 'Download Mbps',\r\n      position: 'left',\r\n      nameGap: 8,\r\n      min: 0,\r\n      max: ({ max }) => Math.max(1, max * 1.15),\r\n      nameTextStyle: { color: colors.primary, fontSize: 10, fontWeight: 600, align: 'left' },\r\n      axisLabel: {\r\n        show: true,\r\n        inside: true,\r\n        color: colors.primary,\r\n        fontSize: 9,\r\n        formatter: (value) => Number(value).toFixed(value < 10 ? 1 : 0),\r\n      },\r\n      axisLine: { show: false },\r\n      axisTick: { show: false },\r\n      splitLine: { show: true, lineStyle: { color: '#142452', opacity: 0.45 } },\r\n    },\r\n    {\r\n      type: 'value',\r\n      name: 'Upload Mbps',\r\n      position: 'right',\r\n      nameGap: 8,\r\n      min: 0,\r\n      max: ({ max }) => Math.max(1, max * 1.15),\r\n      nameTextStyle: { color: colors.cyan, fontSize: 10, fontWeight: 600, align: 'right' },\r\n      axisLabel: {\r\n        show: true,\r\n        inside: true,\r\n        color: colors.cyan,\r\n        fontSize: 9,\r\n        formatter: (value) => Number(value).toFixed(value < 10 ? 1 : 0),\r\n      },\r\n      axisLine: { show: false },\r\n      axisTick: { show: false },\r\n      splitLine: { show: false },\r\n    },\r\n  ],\r\n  series: [\r\n    {\r\n      id: 'port24-download',\r\n      name: 'Download',\r\n      type: 'line',\r\n      yAxisIndex: 0,\r\n      data: rx.times.map((time, index) => [time, rx.values[index]]),\r\n      showSymbol: false,\r\n      smooth: 0.28,\r\n      lineStyle: { width: 3, color: colors.primary },\r\n      z: 3,\r\n    },\r\n    {\r\n      id: 'port24-upload',\r\n      name: 'Upload',\r\n      type: 'line',\r\n      yAxisIndex: 1,\r\n      data: tx.times.map((time, index) => [time, tx.values[index]]),\r\n      showSymbol: false,\r\n      smooth: 0.28,\r\n      lineStyle: { width: 3, color: colors.cyan },\r\n      z: 2,\r\n    },\r\n  ],\r\n  graphic: graphics,\r\n};\r\n",
+          "visualEditor": {
+            "dataset": [],
+            "series": [],
+            "code": "return {};"
+          },
+          "baidu": {
+            "key": "",
+            "callback": "bmapReady"
+          },
+          "gaode": {
+            "key": "",
+            "plugin": "AMap.Scale,AMap.ToolBar"
+          },
+          "google": {
+            "key": "",
+            "callback": "gmapReady"
+          }
+        }
+      }
+    ]
+  },
+  "overwrite": true,
+  "message": "Build configurable UniFi switch kiosk dashboard"
+}

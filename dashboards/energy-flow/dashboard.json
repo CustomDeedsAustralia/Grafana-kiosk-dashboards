@@ -1,0 +1,90 @@
+{
+  "dashboard": {
+    "uid": "kiosk-energy-flow",
+    "title": "Kiosk — Energy Flow",
+    "tags": [
+      "kiosk",
+      "energy"
+    ],
+    "timezone": "UTC",
+    "refresh": "1m",
+    "time": {
+      "from": "now/d",
+      "to": "now"
+    },
+    "timepicker": {
+      "hidden": true
+    },
+    "graphTooltip": 0,
+    "schemaVersion": 42,
+    "panels": [
+      {
+        "id": 1,
+        "type": "volkovlabs-echarts-panel",
+        "pluginVersion": "7.2.5",
+        "title": "Today's energy flow (kWh)",
+        "description": "Solar to home, solar export, and grid import for the current day.",
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        },
+        "datasource": {
+          "type": "influxdb",
+          "uid": "replace-with-your-influxdb-datasource-uid"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": {
+              "type": "influxdb",
+              "uid": "replace-with-your-influxdb-datasource-uid"
+            },
+            "query": "import \"timezone\"\r\nimport \"array\"\r\n\r\noption location = timezone.location(name: \"UTC\")\r\n\r\ntotals =\r\n  from(bucket: \"homeassistant\")\r\n    |> range(start: today(), stop: now())\r\n    |> filter(fn: (r) => r._field == \"value\")\r\n    |> filter(fn: (r) => r.domain == \"sensor\")\r\n    |> filter(fn: (r) =>\r\n      r.entity_id == \"solar_generation_daily\" or\r\n      r.entity_id == \"grid_export_daily\" or\r\n      r.entity_id == \"grid_import_daily\"\r\n    )\r\n    |> last()\r\n    |> group()\r\n    |> reduce(\r\n      fn: (r, accumulator) => ({\r\n        gen: if r.entity_id == \"solar_generation_daily\" then r._value else accumulator.gen,\r\n        exp: if r.entity_id == \"grid_export_daily\" then r._value else accumulator.exp,\r\n        imp: if r.entity_id == \"grid_import_daily\" then r._value else accumulator.imp,\r\n      }),\r\n      identity: {gen: 0.0, exp: 0.0, imp: 0.0},\r\n    )\r\n    |> map(fn: (r) => ({\r\n      solarHome: if r.gen > r.exp then r.gen - r.exp else 0.0,\r\n      solarGrid: r.exp,\r\n      gridHome: r.imp,\r\n    }))\r\n    |> findRecord(fn: (key) => true, idx: 0)\r\n\r\nsolarHome = totals.solarHome\r\nsolarGrid = totals.solarGrid\r\ngridHome = totals.gridHome\r\n\r\narray.from(rows: [\r\n  {source: \"Solar\", target: \"Home\", value: solarHome},\r\n  {source: \"Solar\", target: \"Grid\", value: solarGrid},\r\n  {source: \"Grid\", target: \"Home\", value: gridHome},\r\n])\r\n  |> map(fn: (r) => ({r with _value: r.value}))\r\n  |> drop(columns: [\"value\"])\r\n",
+            "queryType": "flux"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "kwatth",
+            "decimals": 1
+          },
+          "overrides": []
+        },
+        "options": {
+          "renderer": "canvas",
+          "map": "none",
+          "editorMode": "code",
+          "editor": {
+            "format": "auto"
+          },
+          "themeEditor": {
+            "name": "default",
+            "config": "{}"
+          },
+          "getOption": "const frame = context.panel.data.series[0];\r\nif (!frame) {\r\n  return { title: { text: 'No data', left: 'center', top: 'middle' } };\r\n}\r\n\r\nconst fieldValues = (name) => {\r\n  const field = frame.fields.find((f) => f.name === name);\r\n  if (!field || !field.values) {\r\n    return [];\r\n  }\r\n  if (typeof field.values.toArray === 'function') {\r\n    return field.values.toArray();\r\n  }\r\n  if (field.values.buffer) {\r\n    return field.values.buffer;\r\n  }\r\n  return Array.from(field.values);\r\n};\r\n\r\nconst sources = fieldValues('source');\r\nconst targets = fieldValues('target');\r\nconst values = fieldValues('_value');\r\n\r\nconst SOLAR_GREEN = '#36872D';\r\nconst GRID_ORANGE = '#FF9830';\r\n\r\nconst nodeNames = [...new Set([...sources, ...targets])];\r\nconst nodeColor = {\r\n  Solar: SOLAR_GREEN,\r\n  Grid: GRID_ORANGE,\r\n  Home: '#5794F2',\r\n};\r\n\r\nconst nodes = nodeNames.map((name) => ({\r\n  name,\r\n  itemStyle: { color: nodeColor[name] || '#8F8F8F' },\r\n}));\r\n\r\nconst links = sources.map((source, i) => ({\r\n  source,\r\n  target: targets[i],\r\n  value: values[i],\r\n  lineStyle: {\r\n    color: source === 'Solar' ? SOLAR_GREEN : source === 'Grid' ? GRID_ORANGE : '#999999',\r\n    opacity: 0.55,\r\n  },\r\n}));\r\n\r\nreturn {\r\n  backgroundColor: 'transparent',\r\n  tooltip: {\r\n    trigger: 'item',\r\n    triggerOn: 'mousemove',\r\n    formatter: (params) => {\r\n      if (params.dataType === 'edge') {\r\n        return (\r\n          params.data.source +\r\n          ' -> ' +\r\n          params.data.target +\r\n          '<br/>' +\r\n          Number(params.data.value).toFixed(1) +\r\n          ' kWh'\r\n        );\r\n      }\r\n      return params.name;\r\n    },\r\n  },\r\n  series: [\r\n    {\r\n      type: 'sankey',\r\n      layout: 'none',\r\n      orient: 'horizontal',\r\n      top: '6%',\r\n      bottom: '6%',\r\n      left: '1%',\r\n      right: '10%',\r\n      nodeWidth: 26,\r\n      nodeGap: 14,\r\n      draggable: false,\r\n      emphasis: { focus: 'adjacency' },\r\n      label: { fontSize: 16, color: 'inherit' },\r\n      data: nodes,\r\n      links: links,\r\n      lineStyle: { curveness: 0.5 },\r\n    },\r\n  ],\r\n};\r\n",
+          "visualEditor": {
+            "dataset": [],
+            "series": [],
+            "code": "return {};"
+          },
+          "baidu": {
+            "key": "",
+            "callback": "bmapReady"
+          },
+          "gaode": {
+            "key": "",
+            "plugin": "AMap.Scale,AMap.ToolBar"
+          },
+          "google": {
+            "key": "",
+            "callback": "gmapReady"
+          }
+        }
+      }
+    ]
+  },
+  "overwrite": true,
+  "message": "Build configurable energy-flow kiosk dashboard"
+}

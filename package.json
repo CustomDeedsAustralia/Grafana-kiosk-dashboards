@@ -1,0 +1,14 @@
+{
+  "name": "grafana-kiosk-dashboards",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Configurable Grafana dashboards for compact kiosk displays.",
+  "scripts": {
+    "build": "node build-all.js",
+    "check": "node --check dashboard-config.js && node --check build-utils.js && node --check build-all.js && node --check dashboards/computer-room/build.js && node --check dashboards/energy-flow/build.js && node --check dashboards/energy-flow/echarts.js && node --check dashboards/unifi-usw24/build.js && node --check dashboards/unifi-usw24/echarts.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
